@@ -12,8 +12,26 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
     }
+/*
 
     public void onStartButton(View view){
+        Intent intent = new Intent(getApplication(), FieldActivity.class);
+        //Intent intent = new Intent(this, battleActivity.class);
+        startActivity(intent);
+        finish();
+    }
+
+*/
+    public void onPortraitButton(View view){
+        FieldActivity.setRotation(true);
+        Intent intent = new Intent(getApplication(), FieldActivity.class);
+        //Intent intent = new Intent(this, battleActivity.class);
+        startActivity(intent);
+        finish();
+    }
+
+    public void onLandscapeButton(View view){
+        FieldActivity.setRotation(false);
         Intent intent = new Intent(getApplication(), FieldActivity.class);
         //Intent intent = new Intent(this, battleActivity.class);
         startActivity(intent);

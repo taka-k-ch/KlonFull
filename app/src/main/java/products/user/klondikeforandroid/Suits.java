@@ -1,8 +1,6 @@
 package products.user.klondikeforandroid;
 
 
-import android.util.Log;
-
 import java.util.ArrayList;
 
 public class Suits implements Relocation {
@@ -53,8 +51,11 @@ public class Suits implements Relocation {
         ArrayList<Byte> fromList = from.getImmigrants(fromPoint);
 
         //初期チェック（移動失敗パターン）
-        if (fromList.get(0) <= 0) {
+        if(fromList.size()==0){
             //移動元にカードがないため移動失敗
+            return false;
+        } else if (fromList.get(0) <= 0) {
+            //移動元に表側表示カードがないため移動失敗
             return false;
         }
 
@@ -82,6 +83,9 @@ public class Suits implements Relocation {
 
     public static void createInitialSuits(){
         Suits suits = new Suits();
+        for(byte i=0; i<4; i++){
+            suits.suits[i]=0;
+        }
         MainSurfaceView.setSuitsList(suits);
     }
 
