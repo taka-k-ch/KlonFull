@@ -126,7 +126,7 @@ public class Deck implements Relocation {
                     }
                 } while (deck.size() > i);
             } catch (Exception e) {
-                Log.d("Deck", "deckOpen:リロード時に例外が発生");
+                Log.e("Deck", "deckOpen:リロード時に例外が発生"+e);
             }
 
             if (deck.size() == 0) {
@@ -146,6 +146,8 @@ public class Deck implements Relocation {
         //開けるところを記録
         marker = nextMarker;
 
+        //山札にめくるところが残されていない場合、refresh=trueとなる。
+        //refresh=trueの場合、Deckが一周したことを示すため、次回山札開封時には山札画像のみ表示される
         if (!refresh) {
             //markerがついてるところから山札配列を3つ開封
             for (byte i = 0; i < 3; i++) {
