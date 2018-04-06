@@ -310,8 +310,6 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
 
     private void doLandscapeDraw(Canvas canvas) throws RuntimeException {
 
-        //------描画処理を開始------//
-//        Canvas canvas = holder.lockCanvas();
 
         canvas.drawColor(0, PorterDuff.Mode.CLEAR);
         paintBG.setARGB(255, 0, 0x55, 0x25);
@@ -432,17 +430,11 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
         //------スート描写ここまで------//
 
 
-//        holder.unlockCanvasAndPost(canvas);
-        //------描画処理を終了------//
-
 
     }
 
     public void doMovingEffectDraw(Canvas canvas) {
-        //------描画処理を開始------//
-//        Canvas canvas = holder.lockCanvas();
 
-//        canvas.drawColor(0, PorterDuff.Mode.CLEAR);
 
         paint.setAlpha(100);
 
@@ -474,39 +466,43 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
             }
         }
 
-//        holder.unlockCanvasAndPost(canvas);
-//        //------描画処理を終了------//
     }
 
     public static void setTableList(Table table) {
-
+        //現在のTable状況をリストに追加しUndoに備える
         tableList.add(table);
         Undo.plusNowTable();
     }
 
     public static void setDeckList(Deck deck) {
-
+        //現在のDeck状況をリストに追加しUndoに備える
         deckList.add(deck);
         Undo.plusNowDeck();
     }
 
     public static void setSuitsList(Suits suits) {
-
+        //現在のSuits状況をリストに追加しUndoに備える
         suitsList.add(suits);
         Undo.plusNowSuits();
     }
 
     public static boolean doUndo() {
+        //Undo実行メソッド
 
+        //現在の各リストの状況を取得
         short[] beforeValue = Undo.getUndoValue(undoIndex);
         Log.d("getUndoValue情報", "t=" + beforeValue[0] + " / d=" + beforeValue[1] + " / s=" + beforeValue[2]);
+
         if (undoIndex > 0) {
             undoRun=true;
-            undoIndex--;
 
+            //undoIndexを-1し、一手前の状況を呼び出す。
+            undoIndex--;
             Log.d("Undo実行", "現在undoIndex:" + undoIndex);
             short[] afterValue = Undo.getUndoValue(undoIndex);
             Log.d("getUndoValue情報", "t=" + afterValue[0] + " / d=" + afterValue[1] + " / s=" + afterValue[2]);
+
+            //一手前の状況と現在の状況に差異が生じているリストの最後尾を消去
             if (beforeValue[0] != afterValue[0]) {
                 Log.d(TAG, "doUndo : table消去実行");
                 tableList.remove(tableList.size() - 1);
@@ -522,6 +518,8 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
                 suitsList.remove(suitsList.size() - 1);
                 Undo.minusNowSuits();
             }
+
+            //各リストのindexを管理しているUndoリスト自体の最後尾も消去しUndo完了
             Undo.deleteLastInstance();
             undoRun=false;
             return true;
@@ -551,17 +549,19 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
                 + " / s:" + suitsList.size()
                 + " / u:" + Undo.getUndoSize());
 
+        //何もないところが起点となっている場合
         if (fromPoint < 0) {
             Log.d("fromPointが-1以下", "何も実行せず");
             return;
         }
 
+        //現在の各リストのindexを取得
         short undoValue[] = Undo.getUndoValue(undoIndex);
 
         Log.d("値:", "fT" + fromType + "fP" + fromPoint + "tT" + toType + "tP" + toPoint);
 
         if (fromType == 't') {
-            //テーブルをタッチ
+            //テーブルが起点
             from = tableList.get(undoValue[0]);
             Log.d("InputThread", "起点:table");
 
@@ -570,6 +570,7 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
                 //移動先と元が同じテーブルだった場合=開封
                 Log.d("InputThread", "table開封を試行");
                 if (tableList.get(undoValue[0]).tableOpen(fromPoint)) {
+                    //該当テーブルの一番上のカードが裏側表示のカードだった場合は開封成功
                     Log.d("開封", "成功");
                     undoIndex++;
                     Undo.createNewInstance(undoIndex);
@@ -581,7 +582,7 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
 
 
             } else {
-
+                //移動先と元が違なる場合=移動
                 if (toType == 't') {
                     //テーブル→テーブル
                     to = tableList.get(undoValue[0]);
@@ -593,26 +594,30 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
             }
 
         } else if (fromType == 'd') {
+            //Deckが起点
+
             if (!deckList.get(undoValue[1]).isDeckRemain()) {
+                //Deckの残り枚数=0の場合は何もせず
                 return;
             }
 
             if (fromPoint == 0 && toPoint == 0) {
-                //デッキパイルを開封
-                //デッキに残りがあるかチェック
+                //Deckがタップされた場合=パイルを開封
                 Deck nextInstance = (Deck) deckList.get(undoValue[1]).createNewInstance();
                 Log.d("InputThread", "デッキ開封");
                 if (nextInstance.deckOpen()) {
+                    //成功した場合、成功後のDeckの状況を新たなインスタンスにしてリストに格納
                     Log.d("InputThread", "成功");
                     MainSurfaceView.setDeckList(nextInstance);
+                    //各リストのindexを管理しているUndoリストに現在の状況を追加
                     undoIndex++;
                     Undo.createNewInstance(undoIndex);
                 }
-
+                //パイル開封操作の場合、カードの移動が発生しないためここでreturnとする
                 return;
 
             } else if (fromPoint == 1) {
-                //開封済デッキをタッチ
+                //開封済デッキが起点
                 from = deckList.get(undoValue[1]);
 
                 if (toType == 't') {
@@ -623,20 +628,25 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
                     to = suitsList.get(undoValue[2]);
                 } else if (toType == 'd' && toPoint == 1) {
                     Log.d("InputThread", "開封済みdeck→suitsへ直接格納");
-                    //開封済みデッキをタップ
-                    //スートへの格納にチャレンジ
+                    //開封済みデッキがタップされているケース
+                    //スートへの直接格納にチャレンジ
                     to = suitsList.get(undoValue[2]);
                 }
             }
         }
 
         if (to == null || from == null) {
-            Log.d("nurupo!", "ぬるぽ！");
+            Log.d(TAG, "doReleaseAction : [to] or [from]がnullのため動作回避");
         } else {
-
+            //toとfromには、ここまで通ってきたif条件節により、
+            //移動先と元のインスタンスが渡されている。
+            //また、Table,Deck,Suitsの各クラスにはインターフェースが実装されており、
+            //以下のto.immigrationを実行するだけで、全パターンの移動が実行されることとなる。
+            //なお、移動が成功した場合にのみimmigrationメソッドからtrueが戻ってくる。
             if (to.immigration(from, fromPoint, toPoint)) {
-                //移動実行
+                //移動成功
                 Log.d("InputThread", "immigration成功");
+                //各リストのindexを管理しているUndoリストに現在の状況を追加
                 undoIndex++;
                 Undo.createNewInstance(undoIndex);
             }
