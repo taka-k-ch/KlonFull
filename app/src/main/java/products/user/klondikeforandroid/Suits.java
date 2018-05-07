@@ -11,15 +11,19 @@ public class Suits implements Relocation {
     private Suits(){
 
     }
-
+	
+	//一手進める際は、新しく作ったInstanceに現在の状況をコピーしてから編集
     private Suits(Suits s) {
         this.suits = s.suits.clone();
     }
 
+	//一手進める際に利用
+	@Override
     public Relocation createNewInstance(){
         return new Suits(this);
     }
 
+	//Indexを引数として該当するカード番号を返す
     public byte getCard(byte i){
         try {
             return suits[i];
@@ -29,15 +33,22 @@ public class Suits implements Relocation {
     }
 
 
+	//Suitsが移動元になることはないため、このオーバーライドメソッドが使われることはない
+	@Override
     public ArrayList<Byte> getImmigrants(byte i){
         return null;
     }
 
+	//Suitsが移動元になることはないため、このオーバーライドメソッドが使われることはない
+	@Override
     public void departure(byte fromPoint, byte i) {
     }
 
-
+	//(newされた)移動先Instanceに、移動することとなったカードを追加
+	@Override
     public Relocation arrival(ArrayList<Byte> fromList, byte toPoint, byte i){
+    	
+    	//一手進める先のInstanceを取得
         Suits nextSuits = (Suits) createNewInstance();
 
         //移動先配列に移動元カードの値を格納
@@ -46,8 +57,10 @@ public class Suits implements Relocation {
         return nextSuits;
     }
 
+	//移動可能かどうかを実際に判定し、移動可能であれば実行する主要メソッド
     public boolean immigration(Relocation from, byte fromPoint, byte toPoint){
 
+    	//移動元で表になっている全カードのリストを取得(移動しないカードも含まれる)
         ArrayList<Byte> fromList = from.getImmigrants(fromPoint);
 
         //初期チェック（移動失敗パターン）
@@ -68,6 +81,7 @@ public class Suits implements Relocation {
 
             //移動先処理
             Relocation nextInstance = arrival(fromList, suit_value, fromList.get(0));
+        	//一手進める
             MainSurfaceView.setSuitsList((Suits)nextInstance);
 
             //移動元のカードを削除
@@ -81,11 +95,14 @@ public class Suits implements Relocation {
         return false;
     }
 
+	//初期化
     public static void createInitialSuits(){
         Suits suits = new Suits();
         for(byte i=0; i<4; i++){
             suits.suits[i]=0;
         }
+    	
+    	//一手進める(実際のところ、これが一手目となっている)
         MainSurfaceView.setSuitsList(suits);
     }
 

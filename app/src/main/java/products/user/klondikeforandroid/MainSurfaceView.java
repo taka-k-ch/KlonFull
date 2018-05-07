@@ -28,18 +28,23 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
     private Paint paintBG;
     private Bitmap card;
 
-    private static ArrayList<Table> tableList;
-    private static ArrayList<Deck> deckList;
-    private static ArrayList<Suits> suitsList;
+    private static ArrayList<Table> tableList;  //Table(場札)インスタンス格納用
+    private static ArrayList<Deck> deckList;    //Deck(山札)インスタンス格納用
+    private static ArrayList<Suits> suitsList;  //Suits(組札)インスタンス格納用
 
-    private float[][] deckPosition = new float[2][2];
-    private float[][] tablePosition = new float[7][2];
-    private float[][] suitsPosition = new float[4][2];
-
-    private static int[] cardSize;
-
+    //現在の手数を表す。1手進む毎に場の状況を↑のListに保存していく。
+    //Undoするたびにこれを-1することで、1手前の状況をListから呼び出す。
     private static short undoIndex;
     private static boolean undoRun;
+
+
+    //場札・山札・組札の表示座標(左上角部分)を格納
+    //float[i][j]のうち、i=列数、j=0ならx座標/j=1ならy座標を示す
+    private float[][] tablePosition = new float[7][2];  //場札(7列)の座標を格納
+    private float[][] deckPosition = new float[2][2];   //山札(2列:未開封部分/開封部分)の座標を格納
+    private float[][] suitsPosition = new float[4][2];  //組札(4列)の座標を格納
+
+    private static int[] cardSize;  //カード自体の画像サイズを格納
 
     static Resources resources;
 
@@ -144,6 +149,8 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
 
                 //現在の画面向きを取得
                 config = getResources().getConfiguration();
+
+                //画面の向きによってカード画像サイズや配置が変わるため分岐
                 try {
                     if (config.orientation == Configuration.ORIENTATION_PORTRAIT) {
                         //PORTRAIT用描画処理//
@@ -159,6 +166,7 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
 
                 if (FieldActivity.getMovingEffect()) {
                     //移動エフェクト描画//
+                    //カードをドラッグしてる間、半透明のカードを表示させる
                     doMovingEffectDraw(canvas);
                 }
 
@@ -184,15 +192,23 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
 
     }
 
+    //PORTRAIT用描画処理//
     private void doPortraitDraw(Canvas canvas) {
         canvas.drawColor(0, PorterDuff.Mode.CLEAR);
+
+        //緑の背景を描写
         paintBG.setARGB(255, 0, 0x55, 0x25);
         canvas.drawPaint(paintBG);
 
-        //各リストのインデックスを取得
+
+        //各リストのインデックスを取得(現在の場の状況を取得)
         short undoValue[] = Undo.getUndoValue(undoIndex);
 //        Log.d("undoValue", "Table:"+undoValue[0]+" / Deck:"+undoValue[1]+" / Suits:"+undoValue[2]);
 
+
+        //どんな画面サイズの端末上で実行してもレイアウトが崩れないようにするため、
+        //取得した画面サイズから相対位置を指定してカードの配置をしていく。
+        //いろいろ試したところ、この計算式(係数)を使うとカードが綺麗に配置される模様
         final short BOTTOM_MARGIN = (short)(FieldActivity.getHeight()/5*3+100);
         final short SIDE_MARGIN = (short)(FieldActivity.getHeight()/120);
         final float X_COEFFICIENT = (float) 7.2;
@@ -206,6 +222,7 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
             byte cardNum = tableList.get(undoValue[0]).getCard(i, j);
             card = Card.getCard(cardNum);
             if (cardNum < 0) {
+                //裏側表示カードがテーブル上に存在
                 float x = FieldActivity.getWidth() * i / (float) X_COEFFICIENT+SIDE_MARGIN;
                 float y = (float) (FieldActivity.getHeight() / 5*2 - (j * cardSize[1]/6.5)); //30
                 canvas.drawBitmap(card, x, y, null);
@@ -213,6 +230,7 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
                 tablePosition[i][1] = y;
                 backCount++;
             } else if (cardNum > 0) {
+                //表側表示カードがテーブル上に存在
                 float x = FieldActivity.getWidth() * i / (float) X_COEFFICIENT+SIDE_MARGIN;
                 float y = (float) (FieldActivity.getHeight() / 5*2 - (j * cardSize[1]/6.5));
                 canvas.drawBitmap(card, x, y, null);
@@ -221,6 +239,7 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
                 count++;
             } else {
                 if (j < 0) {
+                    //カードが1枚も存在しない場合(白い枠線だけ表示させる)
                     if (backCount == 0 && count == 0) {
                         float x = FieldActivity.getWidth() * i / (float) X_COEFFICIENT+SIDE_MARGIN;
                         float y = FieldActivity.getHeight() / 5*2;
@@ -235,6 +254,8 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
                     backCount=0;
                 }
                 if (i < 0) {
+                    //場札の座標を格納した配列を、ユーザーの入力を管制しているクラスに渡す。
+                    //この配列の座標を参照して、ユーザーの操作を解釈することになる。
                     FieldActivity.setTablePosition(tablePosition);
                     break;
                 }
@@ -245,14 +266,15 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
 
 
         //------デッキ描写ここから------//
-
         if (deckList.get(undoValue[1]).isNextDeckRemain()) {
+            //山札にめくるカードが残されている場合
             float x = FieldActivity.getWidth() * 0 / (float) X_COEFFICIENT+SIDE_MARGIN;
             card = Card.getCard(0);
             canvas.drawBitmap(card, x, BOTTOM_MARGIN, null);
             deckPosition[0][0] = x;
             deckPosition[0][1] = BOTTOM_MARGIN;
         } else {
+            //山札にめくるカードが残されていない場合(白い枠線だけ表示)
             float x = FieldActivity.getWidth() * 0 / (float) X_COEFFICIENT+SIDE_MARGIN;
             card = Card.getCard(53);
             canvas.drawBitmap(card, x, BOTTOM_MARGIN, null);
@@ -267,6 +289,7 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
                 byte cardNum = deckList.get(undoValue[1]).getCard(d);
 //                Log.d("cardNum","="+cardNum+" / index(d)="+d);
                 if (cardNum > 0) {
+                    //このターンのdeckListの中で、表側表示になっているカードをサーチして表示する。
 //                    Log.d("表示されているcardNum","="+cardNum+" / index(d)="+d);
                     float x = FieldActivity.getWidth() * 1 / (float) X_COEFFICIENT+SIDE_MARGIN+ (count) * 40;
                     card = Card.getCard(cardNum);
@@ -276,6 +299,8 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
                     count++;
                 }
                 if (d == 0) {
+                    //場札の座標を格納した配列を、ユーザーの入力を管制しているクラスに渡す。
+                    //この配列の座標を参照して、ユーザーの操作を解釈することになる。
                     FieldActivity.setDeckPosition(deckPosition);
                 }
             }
@@ -287,17 +312,23 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
         //------スート描写ここから------//
         i = 0;
         do {
+            //Bitmap変数cardにとりあえず白枠の画像をセットしておく
             card = Card.getCard(53);
             byte cardNum = suitsList.get(undoValue[2]).getCard(i);
             if (cardNum != 0) {
+                //各組札に何かカードが格納されていれば、そのカードの画像をセット
                 card = Card.getCard(cardNum);
             }
             float x = FieldActivity.getWidth() * (i+3) / (float) X_COEFFICIENT+SIDE_MARGIN;
+
+            //↑でセットされた画像を描写
             canvas.drawBitmap(card, x, BOTTOM_MARGIN, null);
             suitsPosition[i][0] = x;
             suitsPosition[i][1] = BOTTOM_MARGIN;
             i++;
             if (i >= 4) {
+                //場札の座標を格納した配列を、ユーザーの入力を管制しているクラスに渡す。
+                //この配列の座標を参照して、ユーザーの操作を解釈することになる。
                 FieldActivity.setSuitsPosition(suitsPosition);
                 break;
             }
@@ -308,17 +339,23 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
 
     }
 
+    //LANDSCAPE用描画処理//
     private void doLandscapeDraw(Canvas canvas) throws RuntimeException {
 
-
         canvas.drawColor(0, PorterDuff.Mode.CLEAR);
+
+        //緑の背景を描写
         paintBG.setARGB(255, 0, 0x55, 0x25);
         canvas.drawPaint(paintBG);
 
-        //各リストのインデックスを取得
+        //各リストのインデックスを取得(現在の場の状況を取得)
         short undoValue[] = Undo.getUndoValue(undoIndex);
 //        Log.d("undoValue", "Table:"+undoValue[0]+" / Deck:"+undoValue[1]+" / Suits:"+undoValue[2]);
 
+
+        //どんな画面サイズの端末上で実行してもレイアウトが崩れないようにするため、
+        //取得した画面サイズから相対位置を指定してカードの配置をしていく。
+        //いろいろ試したところ、この計算式(係数)を使うとカードが綺麗に配置される模様
         final byte UPPER_MARGIN = 40;
         final float X_COEFFICIENT = (float) 8.0;
 
@@ -331,6 +368,7 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
             byte cardNum = tableList.get(undoValue[0]).getCard(i, j);
             card = Card.getCard(cardNum);
             if (cardNum < 0) {
+                //裏側表示カードがテーブル上に存在
                 float x = FieldActivity.getWidth() / (float) X_COEFFICIENT * (i + 1);
                 float y = FieldActivity.getHeight() / 3 + (backCount * 23);
                 canvas.drawBitmap(card, x, y, null);
@@ -338,6 +376,7 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
                 tablePosition[i][1] = y;
                 backCount++;
             } else if (cardNum > 0) {
+                //表側表示カードがテーブル上に存在
                 float x = FieldActivity.getWidth() / (float) X_COEFFICIENT * (i + 1);
                 float y = FieldActivity.getHeight() / 3 + (backCount * 23)+(count * FieldActivity.getHeight()/33); //count*30
                 canvas.drawBitmap(card, x, y, null);
@@ -346,6 +385,7 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
                 count++;
             } else {
                 if (j < 0) {
+                    //カードが1枚も存在しない場合(白い枠線だけ表示させる)
                     if (backCount == 0 && count == 0) {
                         float x = FieldActivity.getWidth() / (float) X_COEFFICIENT * (i + 1);
                         float y = FieldActivity.getHeight() / 3;
@@ -360,6 +400,8 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
                     backCount=0;
                 }
                 if (i < 0) {
+                    //場札の座標を格納した配列を、ユーザーの入力を管制しているクラスに渡す。
+                    //この配列の座標を参照して、ユーザーの操作を解釈することになる。
                     FieldActivity.setTablePosition(tablePosition);
                     break;
                 }
@@ -372,12 +414,14 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
         //------デッキ描写ここから------//
 
         if (deckList.get(undoValue[1]).isNextDeckRemain()) {
+            //山札にめくるカードが残されている場合
             float x = FieldActivity.getWidth() / (float) X_COEFFICIENT;
             card = Card.getCard(0);
             canvas.drawBitmap(card, x, UPPER_MARGIN, null);
             deckPosition[0][0] = x;
             deckPosition[0][1] = UPPER_MARGIN;
         } else {
+            //山札にめくるカードが残されていない場合(白い枠線だけ表示)
             float x = FieldActivity.getWidth() / (float) X_COEFFICIENT;
             card = Card.getCard(53);
             canvas.drawBitmap(card, x, UPPER_MARGIN, null);
@@ -392,6 +436,7 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
                 byte cardNum = deckList.get(undoValue[1]).getCard(d);
 //                Log.d("cardNum","="+cardNum+" / index(d)="+d);
                 if (cardNum > 0) {
+                    //このターンのdeckListの中で、表側表示になっているカードをサーチして表示する。
 //                    Log.d("表示されているcardNum","="+cardNum+" / index(d)="+d);
                     float x = FieldActivity.getWidth() / (float) X_COEFFICIENT * 2 + (count) * 40;
                     card = Card.getCard(cardNum);
@@ -401,6 +446,8 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
                     count++;
                 }
                 if (d == 0) {
+                    //場札の座標を格納した配列を、ユーザーの入力を管制しているクラスに渡す。
+                    //この配列の座標を参照して、ユーザーの操作を解釈することになる。
                     FieldActivity.setDeckPosition(deckPosition);
                 }
             }
@@ -412,43 +459,56 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
         //------スート描写ここから------//
         i = 0;
         do {
+            //Bitmap変数cardにとりあえず白枠の画像をセットしておく
             card = Card.getCard(53);
             byte cardNum = suitsList.get(undoValue[2]).getCard(i);
             if (cardNum != 0) {
+                //各組札に何かカードが格納されていれば、そのカードの画像をセット
                 card = Card.getCard(cardNum);
             }
             float x = FieldActivity.getWidth() / (float) X_COEFFICIENT * (i + 4);
+
+            //↑でセットされた画像を描写
             canvas.drawBitmap(card, x, UPPER_MARGIN, null);
             suitsPosition[i][0] = x;
             suitsPosition[i][1] = UPPER_MARGIN;
             i++;
             if (i >= 4) {
+                //場札の座標を格納した配列を、ユーザーの入力を管制しているクラスに渡す。
+                //この配列の座標を参照して、ユーザーの操作を解釈することになる。
                 FieldActivity.setSuitsPosition(suitsPosition);
                 break;
             }
         } while (true);
         //------スート描写ここまで------//
 
-
-
     }
 
+    //カードのドラッグ中に表示させる半透明カード(残像エフェクト)の描写
     public void doMovingEffectDraw(Canvas canvas) {
 
-
+        //透過度
         paint.setAlpha(100);
 
+        //タップされた位置を取得
         float[] currentPosition = FieldActivity.getCurrentPosition();
+
+        //タップされた位置(移動元)がTable/Deck/Suitsのどれなのかを取得
+        //(なお、Suitsを起点にカードを移動することはできないので、Type='s'だった場合は何もしない)
         char fromType = FieldActivity.getTouchFromType();
+
+        //移動元の列数を取得
         byte fromPoint = FieldActivity.getTouchFromPoint();
 
+        //各リストのインデックスを取得(現在の場の状況を取得)
         short[] undoValue = Undo.getUndoValue(undoIndex);
 
+        //半透明カード(残像エフェクト)の表示位置を補正
         float x = currentPosition[0] - cardSize[0] / 2;
         float y = currentPosition[1] - cardSize[1] / 2;
 
         if (fromType == 't') {
-            //テーブルから移動中
+            //テーブルを起点に移動している場合
             byte cardNum = tableList.get(undoValue[0]).getCard(fromPoint, (byte) 0);
             if (cardNum > 0) {
                 Bitmap card = Card.getCard(cardNum);
@@ -456,47 +516,48 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
             }
 
         } else if (fromType == 'd' && fromPoint == 1) {
-            //デッキから移動中
+            //デッキを起点に移動している場合
             try {
                 ArrayList<Byte> dl = deckList.get(undoValue[1]).getImmigrants((byte) 0);
                 Bitmap card = Card.getCard(dl.get(0));
                 canvas.drawBitmap(card, x, y, paint);
             } catch (Exception e) {
-
+                Log.e(TAG,"doMovingEffectDrawにて例外発生");
             }
         }
 
     }
 
     public static void setTableList(Table table) {
-        //現在のTable状況をリストに追加しUndoに備える
+        //現在のTable状況をリストに追加し一手進める(Undoに備える)
         tableList.add(table);
         Undo.plusNowTable();
     }
 
     public static void setDeckList(Deck deck) {
-        //現在のDeck状況をリストに追加しUndoに備える
+        //現在のDeck状況をリストに追加し一手進める(Undoに備える)
         deckList.add(deck);
         Undo.plusNowDeck();
     }
 
     public static void setSuitsList(Suits suits) {
-        //現在のSuits状況をリストに追加しUndoに備える
+        //現在のSuits状況をリストに追加し一手進める(Undoに備える)
         suitsList.add(suits);
         Undo.plusNowSuits();
     }
 
+    //Undo実行メソッド
     public static boolean doUndo() {
-        //Undo実行メソッド
 
-        //現在の各リストの状況を取得
+        //各リストのインデックスを取得(現在の場の状況を取得)
         short[] beforeValue = Undo.getUndoValue(undoIndex);
         Log.d("getUndoValue情報", "t=" + beforeValue[0] + " / d=" + beforeValue[1] + " / s=" + beforeValue[2]);
 
+        //初手以外(一手戻せる状況)だったらUndo実行
         if (undoIndex > 0) {
             undoRun=true;
 
-            //undoIndexを-1し、一手前の状況を呼び出す。
+            //undoIndexを-1し、一手前の状況(インスタンス)を呼び出す。
             undoIndex--;
             Log.d("Undo実行", "現在undoIndex:" + undoIndex);
             short[] afterValue = Undo.getUndoValue(undoIndex);
@@ -527,6 +588,7 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
         return false;
     }
 
+	//Redo未実装
     public static void doRedo() {
 /*
         undoIndex++;
@@ -538,9 +600,20 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
 
     }
 
+	
+	/*
+	*以下doReleseActionメソッドにて、入力された操作を実行に移していく。
+	*その際、Tableの操作はTableクラス、Deckの操作はDeckクラス、Suitsの操作はSuitsクラスでそれぞれ管制されているため、
+	*入力された操作を解釈して、適切なクラスの実行メソッドを呼び出さなければならない。
+	*そこで、上記3クラスに共通のInterface(Relocationインターフェース)を実装しておき、ポリモーフィズムで対処する。
+	*具体的には、Relocation変数[to]と[from]を用意し、移動先のインスタンスを[to]に、移動元のインスタンスを[from]に格納。
+	*そしてRelocationインターフェースの抽象メソッド[immigration]をto.immigration(from,*,*)で呼び出せば、
+	*カードの全移動パターンを実現できるようになっている。
+	*/
     public static void doReleaseAction(char fromType, byte fromPoint,
                                        char toType, byte toPoint) {
 
+        //毎回Relocation変数を初期化しておく
         Relocation to = null, from = null;
 
 
@@ -549,40 +622,46 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
                 + " / s:" + suitsList.size()
                 + " / u:" + Undo.getUndoSize());
 
-        //何もないところが起点となっている場合
+        //何もないところが移動元となっている場合(空き地をタップしている場合)
         if (fromPoint < 0) {
             Log.d("fromPointが-1以下", "何も実行せず");
             return;
         }
-
-        //現在の各リストのindexを取得
+                                       	
+        //各リストのインデックスを取得(現在の場の状況を取得)
         short undoValue[] = Undo.getUndoValue(undoIndex);
 
         Log.d("値:", "fT" + fromType + "fP" + fromPoint + "tT" + toType + "tP" + toPoint);
 
         if (fromType == 't') {
-            //テーブルが起点
+            //Tableが移動元の場合
+        	
+        	//fromに現在のテーブル状況を示すインスタンスを渡す。
             from = tableList.get(undoValue[0]);
             Log.d("InputThread", "起点:table");
 
 
             if (fromPoint == toPoint) {
-                //移動先と元が同じテーブルだった場合=開封
+                //移動先と移動元が同じテーブルだった場合=開封
                 Log.d("InputThread", "table開封を試行");
                 if (tableList.get(undoValue[0]).tableOpen(fromPoint)) {
                     //該当テーブルの一番上のカードが裏側表示のカードだった場合は開封成功
                     Log.d("開封", "成功");
+                	
+                	//一手進める
                     undoIndex++;
                     Undo.createNewInstance(undoIndex);
                     return;
                 } else {
-                    //テーブルオープンに失敗した場合、スートへの格納にチャレンジ
+                    //テーブルオープンに失敗した場合、テーブル→スートへの格納にチャレンジ
+                	//toに現在のスート状況を示すインスタンスを渡す
                     to = suitsList.get(undoValue[2]);
                 }
 
 
             } else {
-                //移動先と元が違なる場合=移動
+                //移動先と移動元が違なる地点である場合=カードの移動が発生
+            	
                 if (toType == 't') {
                     //テーブル→テーブル
                     to = tableList.get(undoValue[0]);
@@ -597,44 +676,64 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
             //Deckが起点
 
             if (!deckList.get(undoValue[1]).isDeckRemain()) {
-                //Deckの残り枚数=0の場合は何もせず
+                //Deckの残り枚数=0の場合は何もできないのでreturn
                 return;
             }
 
+        	
             if (fromPoint == 0 && toPoint == 0) {
                 //Deckがタップされた場合=パイルを開封
+            	//このパターンの時は、toとfromを使わずに処理を完了させる。
+            	
+            	//現在の山札の状況がコピーされている、新たな山札インスタンスを発行
                 Deck nextInstance = (Deck) deckList.get(undoValue[1]).createNewInstance();
                 Log.d("InputThread", "デッキ開封");
+            	
+            	//新たな山札インスタンスを使って、山札を開封しにいく
+            	//成功すれば、boolean型の戻り値trueが返ってくる
                 if (nextInstance.deckOpen()) {
-                    //成功した場合、成功後のDeckの状況を新たなインスタンスにしてリストに格納
                     Log.d("InputThread", "成功");
-                    MainSurfaceView.setDeckList(nextInstance);
-                    //各リストのindexを管理しているUndoリストに現在の状況を追加
-                    undoIndex++;
+                	
+                    //成功した場合、成功後のDeckの状況をリストに格納
+                	MainSurfaceView.setDeckList(nextInstance);
+                	
+					//一手進める
+                	undoIndex++;
                     Undo.createNewInstance(undoIndex);
                 }
-                //パイル開封操作の場合、カードの移動が発生しないためここでreturnとする
+            	//前述したとおり、このパターンではカードの移動が発生しないため、ここでreturn
                 return;
 
             } else if (fromPoint == 1) {
-                //開封済デッキが起点
+                //開封済デッキが移動元
+            	
+            	//fromに現在の山札の状況を示すインスタンスを格納
                 from = deckList.get(undoValue[1]);
 
                 if (toType == 't') {
                     //デッキ→テーブル
+                	
+                	//toに現在のテーブルの状況を示すインスタンスを格納
                     to = tableList.get(undoValue[0]);
+                	
                 } else if (toType == 's') {
                     //デッキ→スート
+                	
+                	//toに現在のスートの状況を示すインスタンスを格納
                     to = suitsList.get(undoValue[2]);
+                	
                 } else if (toType == 'd' && toPoint == 1) {
-                    Log.d("InputThread", "開封済みdeck→suitsへ直接格納");
                     //開封済みデッキがタップされているケース
-                    //スートへの直接格納にチャレンジ
+                    Log.d("InputThread", "開封済みdeck→suitsへ直接格納");
+
+                    //デッキ→スートへの直接格納にチャレンジ
+                	//toに現在のスートの状況を示すインスタンスを格納
                     to = suitsList.get(undoValue[2]);
                 }
             }
         }
 
+		//toまたはfromがnullである場合は何もしない
         if (to == null || from == null) {
             Log.d(TAG, "doReleaseAction : [to] or [from]がnullのため動作回避");
         } else {
@@ -646,7 +745,8 @@ public class MainSurfaceView extends SurfaceView implements SurfaceHolder.Callba
             if (to.immigration(from, fromPoint, toPoint)) {
                 //移動成功
                 Log.d("InputThread", "immigration成功");
-                //各リストのindexを管理しているUndoリストに現在の状況を追加
+            	
+                //一手進める
                 undoIndex++;
                 Undo.createNewInstance(undoIndex);
             }
